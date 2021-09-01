@@ -15,7 +15,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkinter import filedialog
 
 
-import Leitura_Arduino as la
+import Leitura_Arduino
 
 class FrameGrafico(tk.Frame):
     
@@ -27,7 +27,7 @@ class FrameGrafico(tk.Frame):
         '''Cria o widget e a figura do plot'''
         
         self.figura_plot = plt.Figure(figsize = (6,5), dpi = 100)
-        self.ax = self.figura_plot.add_subplot(111)
+        self.subplot = self.figura_plot.add_subplot(111)
         self.grafico = FigureCanvasTkAgg(self.figura_plot, self)
         self.plot = self.grafico.get_tk_widget()
         self.plot.grid(row = 0, column = 0, pady = 10,
@@ -37,17 +37,18 @@ class FrameGrafico(tk.Frame):
     def plotar(self, valores, sensores_ativos):
         '''Gerando os plots e os desenha no widget criado
         ----------
-        valores (lista): Lista contendo os np.arrays dos pares ordenados de cada sensor
+        valores (lista): Lista contendo os np.arrays dos pares ordenados de 
+        cada sensor
         sensores_ativos (lista): Lista contendo os checkbox ativados 
         '''
         
-        self.ax.clear()
+        self.subplot.clear()
         if len(sensores_ativos) > 0:
             for i, sensor in enumerate(sensores_ativos):
-               self.ax.plot(valores[i][0],
+               self.subplot.plot(valores[i][0],
                             valores[i][1],
                             label = f'Sensor {sensor+1}' )
-            self.ax.legend()
+            self.subplot.legend()
             self.grafico.draw()
 
 class FrameInformacoes(tk.Frame):
@@ -63,15 +64,15 @@ class FrameInformacoes(tk.Frame):
         self.adicionar_objetos()
     
     def adicionar_objetos(self):
+        '''Cria e posiciona todos os objetos contidos no frame'''
         self.gerar_widgets()
         self.posicionar_widgets(self.checkboxes, 0, 0, 5)
         self.posicionar_widgets(self.labels_temperatura, 1, 0, 5)
         
         
     def gerar_widgets(self):
-        '''Função responsável por gerar os checkboxes e rótulos de cada sensor    
-        ----------
-        '''
+        '''Função responsável por gerar os checkboxes e rótulos de cada sensor'''
+        
         for i in range(0, self.numero_checkboxes):
             self.checkboxes_variables.append(tk.IntVar())
             self.checkbox = tk.Checkbutton(master = self,
@@ -100,7 +101,8 @@ class FrameInformacoes(tk.Frame):
     def atualizar_valores_temperatura(self, lista_temperaturas, sensores_ativos):
         '''Atualiza os valores de temperaturas nos labels
         ----------
-        lista_temperaturas (lista): Lista de n temperaturas, sendo n a quantidade dos sensores ativos
+        lista_temperaturas (lista): Lista de n temperaturas, sendo n a 
+        quantidade dos sensores ativos
         sensores_ativos (lista): Lista com a posição dos n sensores que estão ativos
         '''
         
@@ -109,16 +111,18 @@ class FrameInformacoes(tk.Frame):
             
             
     def obter_sensores_ativos(self):
-        '''Obtém as posições dos sensores que foram selecionados
-
-        '''
+        '''Obtém as posições dos sensores que foram selecionados'''
+        
         lista_sensores_ativos = []
         for i, check_variable in enumerate(self.checkboxes_variables):
             if check_variable.get() == 1:
                 lista_sensores_ativos.append(i)
+        
         self.sensores_ativos = lista_sensores_ativos
 
     def alterar_checkboxes(self, estado):
+        '''Desabilita/Habilita as checkboxes enquanto a coleta de dados está ativa'''
+        
         for checkbox in self.checkboxes:
             checkbox.config(state = estado)
 
@@ -132,6 +136,8 @@ class FrameCaixaMensagem(tk.LabelFrame):
         self.criar_caixa_texto()
         
     def criar_caixa_texto(self):
+        '''Cria e posiciona o label que exibirá as mensagens'''
+        
         self.caixa_mensagem = tk.Label(self,
                                        text = '',
                                        anchor = tk.W, 
@@ -144,7 +150,7 @@ class FrameCaixaMensagem(tk.LabelFrame):
                                  sticky = tk.N)
     
     def print_texto(self, texto):
-        '''Exibe mensagens nas na janela
+        '''Exibe mensagens na janela
         ----------
         texto (string): Mensagem que será exibida 
         '''
@@ -169,6 +175,8 @@ class Menu(tk.Menu):
        
         
     def criar_submenu_principal(self):
+        '''Cria o submenu principal do programa. Lida com arquivos, dados, salvamentos'''
+        
         self.submenu_principal = tk.Menu(self, tearoff=0)
         self.submenu_principal.add_command(label = 'Salvar', command = self.salvar_dados)
         self.submenu_principal.add_command(label = 'Apagar dados',
@@ -177,7 +185,10 @@ class Menu(tk.Menu):
         self.submenu_principal.add_command(label = 'Sair', command = self.sair)
         self.add_cascade(label = 'Arquivo', menu = self.submenu_principal)
 
-    def criar_submenu_configuracao(self):    
+    def criar_submenu_configuracao(self):
+        '''Cria o submenu de configuração. Lida com as configurações de coleta 
+        de dados e comunicação com o arduino'''
+        
         self.submenu_config = tk.Menu(self, tearoff = 0)
         self.submenu_portas_COM = tk.Menu(self, tearoff = 0)
         self.submenu_portas_COM.add_command(label = 'Atual: COM3', state = tk.DISABLED)
@@ -189,8 +200,9 @@ class Menu(tk.Menu):
                                                     self.portas_com(i))
                 
         self.submenu_config.add_cascade(label = 'Porta COM', menu = self.submenu_portas_COM)        
-        self.submenu_config.add_command(label = 'Velocidade de Conexão')
-        self.submenu_config.add_command(label = 'Definir temperatura')
+        self.submenu_config.add_command(label = 'Velocidade de Conexão') # Sem função definida
+        self.submenu_config.add_command(label = 'Definir temperatura') # Sem função definida
+        
         
         
         self.add_cascade(label = 'Configurações', menu = self.submenu_config)
@@ -223,12 +235,14 @@ class Menu(tk.Menu):
         print(f'Porta atualizada para COM{num_porta}')
     
     def definir_func_print(self, func):
+        '''Define a função responsável por imprimir mensagens na janela'''
+        
         self.print_texto = func
     
     def salvar_dados(self):
         '''Responsável por salvar os dados no diretório escolhido pelo usuário, ducumento salvo 
-        no formato .xlsx
-        '''
+        no formato .xlsx '''
+        
         nome_dir_inicial = os.path.join(os.environ['USERPROFILE'], 'Desktop')
         nome_dir = filedialog.asksaveasfilename(initialdir = nome_dir_inicial, 
                                         title ='Salvar como',
@@ -267,8 +281,8 @@ class Menu(tk.Menu):
     def sair(self):
         '''Método responsável por lidar acom a ação de fechar o aplicativo. Testa se
         alguns processos estão rodando e impede o fechamento caso estejam, caso contrário verifica
-        se ha necessidade de salvamento dos dados
-        '''
+        se ha necessidade de salvamento dos dados'''
+        
         if self.master.animando:
             self.print_texto('É necessário terminar a coleta dos dados antes de sair.')
             print('É necessário terminar a coleta dos dados antes de sair.')
@@ -308,6 +322,8 @@ class JanelaPrincipal(tk.Tk):
         self.protocol('WM_DELETE_WINDOW', self.menu.sair)
         
     def criar_frames(self):
+        '''Cria os frames que compõem a janela'''
+        
         self.frame_grafico = FrameGrafico(self)
         self.frame_info = FrameInformacoes(self)
         self.frame_caixa_texto = FrameCaixaMensagem(self, 'Mensagens')
@@ -319,6 +335,8 @@ class JanelaPrincipal(tk.Tk):
         self.config(menu = self.menu)
         
     def configuracao_frames(self):
+        '''Configura o redimensionamento e posicionamento dos frames'''
+        
         self.frame_info.grid(row = 0, column = 0, padx = 20)
         self.columnconfigure(1, weight=1)
         self.rowconfigure(0, weight=1)
@@ -347,21 +365,19 @@ class JanelaPrincipal(tk.Tk):
         self.botao_parar.grid(row = 10, column = 1, pady = 10)
         
     def iniciar_animacao(self):
-        '''Inicia a animaçãoda GUI
-        '''
+        '''Inicia a animação da interface'''
         self.animando = True
         self.animacao()
 
     def terminar_animacao(self):
-        '''Interrompe a animação
-        '''
+        '''Interrompe a animação'''
         self.animando = False
         self.print_texto('Animação interrompida.')
         print('Animação interrompida.')
 
     def animacao(self):
-        '''Método responsável por controlar as animações - atualizacão da T e plots dinâmicos
-        '''    
+        '''Método responsável por controlar as animações - atualizacão da T e plots dinâmicos'''    
+        
         if self.animando:   
             dados = self.menu.fonte_dados.get_dados()
             dados = self.obter_nparray(dados)
@@ -380,6 +396,11 @@ class JanelaPrincipal(tk.Tk):
             self.after(1000, self.animacao)
     
     def obter_nparray(self, lista_valores):
+        '''Arruma os dados recebidos do arduino e os retorna como uma lista de arrays do numpy
+        ------------
+        lista_valores (lista): Lista contendo os valores de tempo e temperatura 
+        para cada sensor
+        '''
         
         lista_nparray = []
         for i, valores in enumerate(lista_valores[0]):
@@ -388,8 +409,7 @@ class JanelaPrincipal(tk.Tk):
         return lista_nparray
         
     def comando_botao_iniciar(self):
-        '''Função que comando o inicio dos processos envolvendo a animação e leitura de dados
-        '''
+        '''Função que comando o inicio dos processos envolvendo a animação e leitura de dados'''
         if self.pode_iniciar:
             self.frame_info.obter_sensores_ativos()
             if len(self.frame_info.sensores_ativos) > 0:
@@ -423,7 +443,7 @@ class JanelaPrincipal(tk.Tk):
     
 def main():
     root = JanelaPrincipal()
-    fonte = la.Arduino()
+    fonte = Leitura_Arduino.Arduino()
     fonte.set_func_print(root.frame_caixa_texto.print_texto)
     
     root.menu.definir_origem_dados(fonte)

@@ -1,20 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sat Apr 24 11:57:22 2021
+Created on Fry Aug 27 11:57:22 2021
 
 @author: Erik
 """
-#==============================================================================
-'''Ajustar valores de tempo para maior precisão
-'''
-#==============================================================================
-
 
 import time
 import threading
 import serial
 
 class Arduino():
+    
     
     def __init__(self):
         self.timeout = 0.9
@@ -27,6 +23,13 @@ class Arduino():
         self.inicio = time.time()
         self.porta_COM = 'COM3'
         self.velocidade_conexao = 19200 
+        
+        self.comunicacao = {
+            'handshake': 'h',
+            'leitura': 'r',
+            'retorno':'k'
+            }
+        
         
     def criar_conexao(self):
         '''Cria a conexão serial com o Arduino
@@ -54,12 +57,12 @@ class Arduino():
         time.sleep(tempo_espera)
         
         if self.porta_serial.isOpen():
-            self.enviar_dados('h')  #Enviando o handshake
+            self.enviar_dados(self.comunicacao['handshake'])
             time.sleep(0.01)
             retorno = self.porta_serial.read(size = 8)
             retorno = retorno.decode()
             
-            if retorno == 'k':
+            if retorno == self.comunicacao['retorno']:
                 self.conexao_ligada = True
                 self.print_mensagem('Conexão estabelecida.')
                 print('Conexão estabelecida.')
@@ -134,8 +137,9 @@ class Arduino():
         print('Thread terminada.')
     
     def ler_temperaturas(self, indice_sensor):
+        '''Le as temperaturas da porta serial e, caso exista algum erro, imprime o
+        erro obtido, retornando False'''
         
-    
         self.enviar_dados(f'{indice_sensor}')
         leitura = self.porta_serial.read(size = 32).decode()
         leitura = leitura.split('\r\n')[0]
@@ -168,7 +172,8 @@ class Arduino():
 
      
     def ler_tempo(self):
-
+        '''Calcula o tempo passado desde o inicio da comunicação'''
+        
         tempo = (time.time() - self.inicio)    
         
         return tempo    
@@ -183,7 +188,7 @@ class Arduino():
         while self.gerando:
             
             for i, sensor in enumerate(self.sensores_ativos):
-                self.enviar_dados('r')
+                self.enviar_dados(self.comunicacao['leitura'])
                 temperatura = self.ler_temperaturas(sensor)
                 
                 if temperatura:
@@ -217,11 +222,6 @@ class Arduino():
         '''
         self.velocidade_conexao = velocidade_conexao
         
-    def considerar_offset_tempo(self):
-        tempo_inicial = self.tempo
-        
-        for i in range(0,len(self.tempo)):
-            self.tempo[i] = self.tempo[i] - tempo_inicial
             
     def print_mensagem(self, mensagem):
         '''Exibe, segundo o método definida previamente, a mensagem passada.
@@ -239,6 +239,7 @@ class Arduino():
         self.func_print = func_print
 
 
+
 if __name__ == "__main__":
     
     fonte = Arduino()
@@ -250,5 +251,5 @@ if __name__ == "__main__":
     #fonte.criar_conexao()
     #fonte.verificar_conexao()
      
-     #fonte.inicializar_thread()
+    #fonte.inicializar_thread()
     
