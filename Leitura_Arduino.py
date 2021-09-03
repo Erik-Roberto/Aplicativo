@@ -8,25 +8,30 @@ Created on Fry Aug 27 11:57:22 2021
 import time
 import threading
 import serial
+import struct
 
 class Arduino():
     
     
     def __init__(self):
         self.timeout = 0.9
-        self.intervalo_entre_leituras = 0.2 # Em segundos
+        self.intervalo_entre_leituras = 1 # Em segundos
         self.temperaturas = []
         self.tempo = []
         self.gerando = False
         self.conexao_ligada = False
         self.leitura_pressao_ativada = False
-        self.inicio = time.time()
+        self.inicio = 0
         self.porta_COM = 'COM3'
         self.velocidade_conexao = 19200 
         
+        self.constante_tempo_leitura = 0.190444
         self.comunicacao = {
             'handshake': 'h',
             'leitura': 'r',
+            'leitura_cj': 'c',
+            'pressao': 'p',
+            'tipo_TC': 's',
             'retorno':'k'
             }
         
@@ -104,17 +109,7 @@ class Arduino():
         else:
             self.print_mensagem('Conexão não estabelecida.')
             print('Conexão não estabelecida.')
-   
-    def set_sensores_ativos(self, sensores_ativos):
-        '''Define internamente e no arduino o número de sensores que deverão ser lidos
-        ----------
-        sensores_ativos [lista] : Lista contendo o índice dos sensores selecionados
-        '''
-        self.sensores_ativos = sensores_ativos
-        for _ in sensores_ativos:
-            self.temperaturas.append([])
-            self.tempo.append([])
-            
+
     def reset_memoria(self):
         '''Apaga os valores armazenados durante a leitura
         '''
@@ -136,55 +131,78 @@ class Arduino():
         self.print_mensagem('Thread terminada.')
         print('Thread terminada.')
     
+    def erros(self, leitura):
+        
+        if leitura == '\x00':
+            self.print_mensagem('Erro: 1')
+        
+        elif leitura == '\x01':
+            self.print_mensagem('Erro: 2')
+
+        elif leitura == '\x02':
+            self.print_mensagem('Erro: 3')
+     
+        elif leitura == '\x04':
+            self.print_mensagem('Erro: 4')
+  
+        else:
+            self.print_mensagem(f'Erro: Leitura desconhecida. Foi recebido: {leitura}')
+        
     def ler_temperaturas(self, indice_sensor):
         '''Le as temperaturas da porta serial e, caso exista algum erro, imprime o
         erro obtido, retornando False'''
         
         self.enviar_dados(f'{indice_sensor}')
-        leitura = self.porta_serial.read(size = 32).decode()
-        leitura = leitura.split('\r\n')[0]
-    
-        try:
-            temperatura = float(leitura)/1000000
+        
+        leitura_junta_quente = self.porta_serial.read(size = 3)
+        leitura_junta_fria = self.porta_serial.read(size = 2)
+        
+        
+        leitura_junta_quente = leitura_junta_quente + b'\x00'
+        
+        if leitura_junta_quente[0:2] != b'\x80\x00':
+            
+            [junta_quente] = struct.unpack('>l', leitura_junta_quente)
+            
+            [junta_fria] = struct.unpack('>h', leitura_junta_fria)
+            
+            temperatura = (junta_quente + junta_fria)/1000000
+            #print(temperatura)
             return temperatura
         
-        except:
+        else:
+            leitura = leitura_junta_quente[2:3].decode()
+            self.erros(leitura)
             
-            if leitura == 'U':
-                self.print_mensagem('Erro: 1')
-                return False
-            
-            elif leitura == 'D':
-                self.print_mensagem('Erro: 2')
-                return False
-            
-            elif leitura == 'T':
-                self.print_mensagem('Erro: 3')
-                return False
-            
-            elif leitura == 'Q':
-                self.print_mensagem('Erro: 4')
-                return False
-            
-            else:
-                self.print_mensagem('Erro: Leitura desconhecida')
-                return False
-
-     
+            return False
+    
+    def ler_junta_fria(self):
+        leitura_junta_fria = self.porta_serial.read(size=2)
+        [junta_fria] = struct.unpack('>h', leitura_junta_fria)
+        
+        return junta_fria
+    
     def ler_tempo(self):
         '''Calcula o tempo passado desde o inicio da comunicação'''
         
-        tempo = (time.time() - self.inicio)    
+        numero_sensores = len(self.sensores_ativos)
+        tempo = (time.time() - self.inicio) - numero_sensores*self.constante_tempo_leitura 
         
         return tempo    
     
     def ler_pressao(self):
-        pass
-    
+        self.enviar_dados(self.comunicacao['pressao'])
+        leitura_pressao = self.porta_serial.read(size = 2)
+        
+        [pressao] = struct.unpack('>h', leitura_pressao)
+        
+        self.pressao.append(pressao)
+        
     
     def ler_dados(self):
         '''Lê os dados do arduino em um loop infinito e os armazena
         '''
+        self.inicio = time.time()
         while self.gerando:
             
             for i, sensor in enumerate(self.sensores_ativos):
@@ -196,17 +214,43 @@ class Arduino():
                     
                     tempo = self.ler_tempo()
                     self.tempo[i].append(tempo)
-                    
+                   
             if self.leitura_pressao_ativada:
                 self.ler_pressao()
-            
+                
             time.sleep(self.intervalo_entre_leituras)
      
         
     def get_dados(self):
         '''Retorna os valores de temperatura e tempo armazenados
         '''
-        return [self.tempo, self.temperaturas]    
+        return [self.tempo, self.temperaturas]     
+     
+    def get_pressao(self):
+        
+        return self.pressao
+     
+    def set_sensores_ativos(self, sensores_ativos):
+        '''Define internamente e no arduino o número de sensores que deverão ser lidos
+        ----------
+        sensores_ativos [lista] : Lista contendo o índice dos sensores selecionados
+        '''
+        self.sensores_ativos = sensores_ativos
+        for _ in sensores_ativos:
+            self.temperaturas.append([])
+            self.tempo.append([])
+            
+        numero_sensores = len(self.sensores_ativos)
+        self.intervalo_entre_leituras -=  numero_sensores*self.constante_tempo_leitura 
+    
+    def set_leitura_pressao(self):
+        self.leitura_pressao_ativada = True
+        self.pressao = []
+    
+    def set_tipo_termopar(self, tipo):
+        self.enviar_dados(self.comunicacao['tipo_TC'])
+        self.enviar_dados(tipo)
+    
     
     def set_porta_COM(self, porta_COM):
         '''Define a porta COM na qual será criada a conexão serial, padrão: COM3
@@ -221,7 +265,10 @@ class Arduino():
         velocidade_conexao (int) : Inteiro que define a velocidade de conexão.
         '''
         self.velocidade_conexao = velocidade_conexao
+    
+    def set_intervalo_leitura(self, intervalo):
         
+        self.intervalo_entre_leituras = intervalo
             
     def print_mensagem(self, mensagem):
         '''Exibe, segundo o método definida previamente, a mensagem passada.
@@ -239,6 +286,13 @@ class Arduino():
         self.func_print = func_print
 
 
+def teste(intervalo):
+    inicio = time.time()
+    time.sleep(intervalo)
+    final = time.time()
+    intervalo = final - inicio
+    print(f'intervalo = {intervalo}')
+    
 
 if __name__ == "__main__":
     
@@ -246,7 +300,7 @@ if __name__ == "__main__":
     
     fonte.porta_COM = 'COM4'
     
-    fonte.set_sensores_ativos([2, 3])
+    fonte.set_sensores_ativos([1])
     
     #fonte.criar_conexao()
     #fonte.verificar_conexao()

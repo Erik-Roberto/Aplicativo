@@ -27,31 +27,34 @@ void setaMux(char c) {
 }
 
 void printErrors() {
-  
+    Serial.write(0x80);
+    Serial.write(0x00);
+    
     if (tc.isOpen()) {
-        Serial.write('U');
-        
+        Serial.write(0x00);
     } else if (tc.isOverUnderVoltage()) {
-        Serial.write('D');
-        
+        Serial.write(0x01);
     } else if (tc.isInternalOutOfRange()) {
-        Serial.write('T');
-        
+        Serial.write(0x02);
     } else if (tc.isExternalOutOfRange()) {
-        Serial.write('Q');
-        
+        Serial.write(0x04);
     } 
-    //Serial.write(cj >> 8);
-    //Serial.write(cj & 0xFF);
-    //Serial.println(cj);
+    
+    Serial.write(cj >> 8);
+    Serial.write(cj & 0xFF);
 }
 
 void printData() {
     lpc = tc.getExternalBytes();
-    cj = tc.getInternalBytes();                         
+    cj = tc.getInternalBytes();
+                   
+    Serial.write(lpc >> 24);
+    Serial.write((lpc >> 16) & 0xFF);
+    Serial.write((lpc >> 8) & 0xFF);
 
-    Serial.println(lpc);
-    //Serial.println(cj);
+    Serial.write(cj >> 8);
+    Serial.write(cj & 0xFF); 
+
 }
 
 char data;
@@ -82,9 +85,8 @@ void loop()
           
             tc.read();
             cj = tc.getInternalBytes();
-            //Serial.write(cj >> 8);
-            //Serial.write(cj & 0xFF); 
-            Serial.println(cj);
+            Serial.write(cj >> 8);
+            Serial.write(cj & 0xFF); 
             
         } else if (data == 's') {
 
@@ -102,14 +104,14 @@ void loop()
             }            
           
         } else if (data == 'p') {
-
+            
             pressao = analogRead(5);
-            //Serial.write(pressao >> 8);
-            //Serial.write(pressao & 0xFF); 
-          
+            Serial.write(pressao >> 8);
+            Serial.write(pressao & 0xFF);  
         }
        
     }  
-    
+
+    Serial.flush();
       
 }

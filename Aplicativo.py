@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkinter import filedialog
-
+from tkinter.simpledialog import askinteger
 
 import Leitura_Arduino
 
@@ -48,6 +48,7 @@ class FrameGrafico(tk.Frame):
                self.subplot.plot(valores[i][0],
                             valores[i][1],
                             label = f'Sensor {sensor+1}' )
+               
             self.subplot.legend()
             self.grafico.draw()
 
@@ -60,15 +61,16 @@ class FrameInformacoes(tk.Frame):
         self.checkboxes_variables = []
         self.labels_temperatura = []
         self.sensores_ativos = []        
-        
+        self.variavel_checkbox_pressao = tk.IntVar()
         self.adicionar_objetos()
     
     def adicionar_objetos(self):
         '''Cria e posiciona todos os objetos contidos no frame'''
         self.gerar_widgets()
-        self.posicionar_widgets(self.checkboxes, 0, 0, 5)
-        self.posicionar_widgets(self.labels_temperatura, 1, 0, 5)
-        
+        self.posicionar_widgets(self.checkboxes, 0, 0, 0, 5)
+        self.posicionar_widgets(self.labels_temperatura, 0, 1, 0, 5)
+        self.checkbox_pressao.grid(row = self.numero_checkboxes + 4, column = 0, padx = 0, pady = 5)
+        self.label_pressao.grid(row = self.numero_checkboxes + 4, column = 1, padx = 0, pady = 5)
         
     def gerar_widgets(self):
         '''Função responsável por gerar os checkboxes e rótulos de cada sensor'''
@@ -83,8 +85,12 @@ class FrameInformacoes(tk.Frame):
             self.labels_temperatura.append(self.label)
             self.checkboxes.append(self.checkbox)
     
-    
-    def posicionar_widgets(self, lista_widgets, coluna, espacamentox = 0, espacamentoy = 0):
+        self.checkbox_pressao = tk.Checkbutton(master = self,
+                                               text = 'Sensor Pressão',
+                                               variable = self.variavel_checkbox_pressao)
+        self.label_pressao = tk.Label(master = self, text = '      Pressão = None' )
+        
+    def posicionar_widgets(self, lista_widgets, linha, coluna, espacamentox = 0, espacamentoy = 0):
         '''Posiciona n objetos pelo método grid
         ----------
         lista_widgets (lista): Lista de objetos que serão posicionados
@@ -94,9 +100,8 @@ class FrameInformacoes(tk.Frame):
         '''
         
         for i, widget in enumerate(lista_widgets):
-            widget.grid(row = i, column = coluna, padx = espacamentox, pady = espacamentoy)
+            widget.grid(row = linha+i, column = coluna, padx = espacamentox, pady = espacamentoy)
     
-        
     
     def atualizar_valores_temperatura(self, lista_temperaturas, sensores_ativos):
         '''Atualiza os valores de temperaturas nos labels
@@ -125,6 +130,8 @@ class FrameInformacoes(tk.Frame):
         
         for checkbox in self.checkboxes:
             checkbox.config(state = estado)
+        
+        self.checkbox_pressao.config(state = estado)
 
 class FrameCaixaMensagem(tk.LabelFrame):
 
@@ -142,7 +149,7 @@ class FrameCaixaMensagem(tk.LabelFrame):
                                        text = '',
                                        anchor = tk.W, 
                                        justify = tk.LEFT,
-                                       height = 12)
+                                       height = 6)
 
         self.caixa_mensagem.grid(row = 0,
                                  column = 0,
@@ -202,20 +209,12 @@ class Menu(tk.Menu):
         self.submenu_config.add_cascade(label = 'Porta COM', menu = self.submenu_portas_COM)        
         self.submenu_config.add_command(label = 'Velocidade de Conexão') # Sem função definida
         self.submenu_config.add_command(label = 'Definir temperatura') # Sem função definida
-        
-        
+        self.submenu_config.add_command(label = 'Intervalo de Leitura',
+                                        command = self.definir_intervalo_leitura)
+
         
         self.add_cascade(label = 'Configurações', menu = self.submenu_config)
         
-        
-    def definir_origem_dados(self, fonte_dados):
-        '''Método responsável por estabelecer qual classe vai gerar os dados
-        ----------
-        fonde_dados (classe): Classe que fornecerá os dados
-        '''
-        self.fonte_dados = fonte_dados
-        
-    
     def apagar_dados(self):
         '''Apaga os dados armazendados
         '''
@@ -234,49 +233,101 @@ class Menu(tk.Menu):
         self.print_texto(f'Porta atualizada para COM{num_porta}')
         print(f'Porta atualizada para COM{num_porta}')
     
+        
+    def definir_origem_dados(self, fonte_dados):
+        '''Método responsável por estabelecer qual classe vai gerar os dados
+        ----------
+        fonte_dados (classe): Classe que fornecerá os dados
+        '''
+        self.fonte_dados = fonte_dados
+    
+    
+        
+    def definir_intervalo_leitura(self):
+
+        intervalo = askinteger('Entrada do intervalo de leitura',
+                               'Intervalo entre leituras / segundos')
+        
+        if intervalo:
+            self.fonte_dados.set_intervalo_leitura(intervalo)
+    
     def definir_func_print(self, func):
         '''Define a função responsável por imprimir mensagens na janela'''
         
         self.print_texto = func
     
+    
     def salvar_dados(self):
-        '''Responsável por salvar os dados no diretório escolhido pelo usuário, ducumento salvo 
-        no formato .xlsx '''
         
         nome_dir_inicial = os.path.join(os.environ['USERPROFILE'], 'Desktop')
         nome_dir = filedialog.asksaveasfilename(initialdir = nome_dir_inicial, 
                                         title ='Salvar como',
                                         filetypes = (('Arquivos xlsx', '*.xlsx'),
                                                      ('Todos tipos', '*.*')))
-
+        
         if nome_dir is None:
+            return
+        
+        elif nome_dir == '':
             return
         
         else:
             if not nome_dir.endswith('.xlsx'):       
-                nome_dir = f'{nome_dir}.xlsx'
-
-            workbook = xlsxwriter.Workbook(nome_dir)
-            worksheet = workbook.add_worksheet()
-        
-            dados = self.fonte_dados.get_dados()
-            
-            sensores = self.master.frame_info.sensores_ativos
-            tempos = dados[0]
-            temperaturas = dados[1]
-            
-            if len(tempos) > 0:
-                for k, sensor in enumerate(sensores):
-                    worksheet.write(0, k*2, 'Tempo / (s)')
-                    worksheet.write(0, k*2+1, f'Temperatura termopar {sensor+1} / (ºC)')
-                    for i, temperatura_sensor_k in enumerate(temperaturas[k]):
-                        worksheet.write(i+1, k*2, tempos[k][i])
-                        worksheet.write(i+1, k*2+1, temperatura_sensor_k)
-                        
-                workbook.close()
- 
+                nome_dir_T = f'{nome_dir}.xlsx'
+             
+                self.salvar_temperatura(nome_dir_T)
+                
+                if self.fonte_dados.leitura_pressao_ativada:
+                    nome_dir_P = f'{nome_dir} - Pressao.xlsx'
+                    self.salvar_pressao(nome_dir_P)
+                
         self.apagar_dados()
         self.master.pode_iniciar = True
+        
+    def salvar_pressao(self, nome_dir):
+        
+        workbook = xlsxwriter.Workbook(nome_dir)
+        worksheet = workbook.add_worksheet()
+    
+        dados = self.fonte_dados.get_pressao()
+        
+        pressao = dados
+        
+        if len(pressao) > 0:
+            #worksheet.write(0, 0, 'Tempo / (s)')
+            worksheet.write(0, 1, 'Pressão')
+            for i, leitura in enumerate(pressao):
+            #    worksheet.write(i+1, 0, tempo[i])
+                worksheet.write(i+1, 1, leitura)
+                
+            workbook.close()
+        
+        
+    def salvar_temperatura(self, nome_dir):
+        '''Responsável por salvar os dados no diretório escolhido pelo usuário, documento salvo 
+        no formato .xlsx '''
+        
+
+        workbook = xlsxwriter.Workbook(nome_dir)
+        worksheet = workbook.add_worksheet()
+    
+        dados = self.fonte_dados.get_dados()
+        
+        sensores = self.master.frame_info.sensores_ativos
+        tempos = dados[0]
+        temperaturas = dados[1]
+        
+        if len(tempos) > 0:
+            for k, sensor in enumerate(sensores):
+                worksheet.write(0, k*2, 'Tempo / (s)')
+                worksheet.write(0, k*2+1, f'Temperatura termopar {sensor+1} / (ºC)')
+                for i, temperatura_sensor_k in enumerate(temperaturas[k]):
+                    worksheet.write(i+1, k*2, tempos[k][i])
+                    worksheet.write(i+1, k*2+1, temperatura_sensor_k)
+                    
+            workbook.close()
+
+        
 
     def sair(self):
         '''Método responsável por lidar acom a ação de fechar o aplicativo. Testa se
@@ -303,7 +354,7 @@ class Menu(tk.Menu):
                     self.salvar_dados()
                     time.sleep(0.100)
                     self.master.destroy()
-                    
+   
 class JanelaPrincipal(tk.Tk):
     
     def __init__(self, nome_janela = 'Titulo', tamanho_inicial_janela = '500x500'):
@@ -390,7 +441,8 @@ class JanelaPrincipal(tk.Tk):
                     ultimo_valor = round(dados_sensor_n[1][ultima_posicao], 3)
                     valores_labels.append(ultimo_valor) 
                         
-                self.frame_info.atualizar_valores_temperatura(valores_labels, self.frame_info.sensores_ativos)
+                self.frame_info.atualizar_valores_temperatura(valores_labels,
+                                                              self.frame_info.sensores_ativos)
             
             self.frame_grafico.plotar(dados, self.frame_info.sensores_ativos)
             self.after(1000, self.animacao)
@@ -415,8 +467,14 @@ class JanelaPrincipal(tk.Tk):
             if len(self.frame_info.sensores_ativos) > 0:
                 if self.menu.fonte_dados.criar_conexao():
                     if self.menu.fonte_dados.verificar_conexao():
-                        sensores_ativos=self.frame_info.sensores_ativos
+                        
+                        sensores_ativos = self.frame_info.sensores_ativos                
                         self.menu.fonte_dados.set_sensores_ativos(sensores_ativos)
+                        
+                        pressao_ativada = self.frame_info.variavel_checkbox_pressao.get()
+                        if pressao_ativada:
+                            self.menu.fonte_dados.set_leitura_pressao()
+                        
                         self.menu.submenu_principal.entryconfigure('Salvar', state = tk.DISABLED)
                         self.menu.fonte_dados.inicializar_thread()
                         self.frame_info.alterar_checkboxes(tk.DISABLED)
@@ -447,7 +505,6 @@ def main():
     fonte.set_func_print(root.frame_caixa_texto.print_texto)
     
     root.menu.definir_origem_dados(fonte)
-    
     
     root.mainloop()
 
