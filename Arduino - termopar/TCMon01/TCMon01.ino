@@ -1,8 +1,15 @@
+#include <PID_v1.h>
 #include <SPI.h>
 #include "NanoshieldTermoparMod.h"
 
 // Termopar Nanoshield on CS pin D8, type T thermocouple, no averaging
 NanoshieldTermoparMod tc(8, TC_TYPE_T, TC_AVG_OFF);
+
+//Define Variables for PID controller
+double Setpoint, Input, Output;
+
+//Specify PID initial constants - ki, kp, kd, and directon
+PID PID_controller(&Input, &Output, &Setpoint, 10, 5, 0, REVERSE);
 
 uint32_t lpc;
 uint16_t cj;
@@ -15,7 +22,25 @@ void setup()
     pinMode(9, OUTPUT);
     pinMode(6, OUTPUT);    
     pinMode(5, OUTPUT);
+    
+    pinMode(4, OUTPUT);
+    digitalWrite(4,HIGH);
     pressao = analogRead(5);
+
+    //Pino de Saída PWM 490.2 Hz
+    pinMode(3, OUTPUT);
+    //Garantindo que a placa está desligada
+    digitalWrite(3, HIGH);
+    
+    //Alterando a frequancia do PWM para 30.64 Hz
+    TCCR2B = TCCR2B & B11111000 | B00000111;
+
+    Setpoint = 10;
+    
+    //turn the PID on
+    PID_controller.SetMode(AUTOMATIC);
+
+    
 }
 
 void setaMux(char c) {    
@@ -57,10 +82,60 @@ void printData() {
 
 }
 
+void set_pid_constants(){
+    
+    float kp = readFloat();
+    float ki = readFloat();
+    float kd = readFloat();
+
+    PID_controller.SetTunings(kp, ki, kd);
+
+}
+
+void control(int sensor){
+
+    setaMux(sensor);
+    tc.manualRead();  
+    if (tc.hasError()) {
+        //Desligando placa
+        Output = 255;
+        
+    } else {  
+        lpc = tc.getExternalBytes();
+        cj = tc.getInternalBytes();  
+        Input = lpc/pow(2,12);
+        PID_controller.Compute();
+    }
+    
+    analogWrite(3,Output);
+    
+}
+
+void setManualControl(int PW){
+    
+    PID_controller.SetMode(MANUAL);
+    Output = PW;
+}
+
+
+double readFloat(){
+  char inBytes;
+  float number = 0.0;
+  int i;
+  int n_Bytes = 2;
+
+  for(i=0; i<n_Bytes; i++){
+      inBytes = Serial.read();
+      number += inBytes*pow(10,-i);  
+    }
+  return number;
+}
+
+
 char data;
 void loop()
 {
-    
+  
     if (Serial.available() > 0) {
   
        data = Serial.read();
@@ -108,9 +183,36 @@ void loop()
             pressao = analogRead(5);
             Serial.write(pressao >> 8);
             Serial.write(pressao & 0xFF);  
+        
+        } else if (data == 'j'){
+ 
+            set_pid_constants();
+            //Eco
+            Serial.println(PID_controller.GetKp());
+
+
+        } else if (data == 't'){
+
+            Setpoint = readFloat();
+            //Eco
+            Serial.println(Setpoint);
+        
+        } else if (data == 'a'){
+          
+              PID_controller.SetMode(AUTOMATIC);
+              
+        } else if (data == 'm'){
+          
+              data = Serial.read();  
+              setManualControl(data);
+              //Eco
+              Serial.println(data);
         }
-       
-    }  
+
+        
+    } else {
+        control(3);
+      }
 
     Serial.flush();
       
