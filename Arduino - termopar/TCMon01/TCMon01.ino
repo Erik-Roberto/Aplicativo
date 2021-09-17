@@ -27,8 +27,9 @@ void setup()
     digitalWrite(4,HIGH);
     pressao = analogRead(5);
 
-    //Pino de Saída PWM 490.2 Hz
+    //Pino 3 de Saída PWM 490.2 Hz
     pinMode(3, OUTPUT);
+    
     //Garantindo que a placa está desligada
     digitalWrite(3, HIGH);
     
@@ -36,9 +37,10 @@ void setup()
     TCCR2B = TCCR2B & B11111000 | B00000111;
 
     Setpoint = 10;
+    Output = 255;
     
     //turn the PID on
-    PID_controller.SetMode(AUTOMATIC);
+    //PID_controller.SetMode(AUTOMATIC);
 
     
 }
@@ -93,30 +95,20 @@ void set_pid_constants(){
 }
 
 void control(int sensor){
-
+    
     setaMux(sensor);
-    tc.manualRead();  
+    tc.manualRead();
     if (tc.hasError()) {
         //Desligando placa
         Output = 255;
         
     } else {  
-        lpc = tc.getExternalBytes();
-        cj = tc.getInternalBytes();  
-        Input = lpc/pow(2,12);
+        lpc = tc.getExternalBytes(); 
+        Input = (double) lpc/pow(2,20);
         PID_controller.Compute();
     }
     
-    analogWrite(3,Output);
-    
 }
-
-void setManualControl(int PW){
-    
-    PID_controller.SetMode(MANUAL);
-    Output = PW;
-}
-
 
 double readFloat(){
   char inBytes;
@@ -134,8 +126,8 @@ double readFloat(){
 
 char data;
 void loop()
-{
-  
+{   
+
     if (Serial.available() > 0) {
   
        data = Serial.read();
@@ -165,6 +157,7 @@ void loop()
             
         } else if (data == 's') {
 
+            delay(5);
             data = Serial.read();
             switch (data) {
                 case 'T': tc.setType(TC_TYPE_T); break;
@@ -177,7 +170,7 @@ void loop()
                 case 'S': tc.setType(TC_TYPE_S); break;
                 default: tc.setType(TC_TYPE_T);
             }            
-          
+            
         } else if (data == 'p') {
             
             pressao = analogRead(5);
@@ -190,30 +183,31 @@ void loop()
             //Eco
             Serial.println(PID_controller.GetKp());
 
-
-        } else if (data == 't'){
-
-            Setpoint = readFloat();
-            //Eco
-            Serial.println(Setpoint);
-        
-        } else if (data == 'a'){
-          
-              PID_controller.SetMode(AUTOMATIC);
+        }
+         else if (data == 'a'){
+     
+              delay(5);
+              Setpoint = (double)Serial.read();
+              control(3);
+              PID_controller.SetMode(AUTOMATIC);           
+              analogWrite(3,(int)Output);
               
         } else if (data == 'm'){
-          
-              data = Serial.read();  
-              setManualControl(data);
-              //Eco
-              Serial.println(data);
+              
+              delay(5);
+              Output = Serial.read();
+              PID_controller.SetMode(AUTOMATIC);
+              analogWrite(3,(int)Output);
+  
         }
-
-        
-    } else {
-        control(3);
-      }
-
+    
+    } else{
+      //Output = 255;
+    
+    }
+          
+    
+    
     Serial.flush();
       
 }
